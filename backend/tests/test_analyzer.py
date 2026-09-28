@@ -94,3 +94,14 @@ def test_messy_incident_ids_from_the_model_are_normalised():
     assert out.recommendation.contrasting_incidents[0].incident == "INC-004"
     cards = {c.incident_id: c for c in out.evidence}
     assert cards["INC-002"].role == "supports" and cards["INC-002"].root_cause  # full card, not a bare snippet
+
+
+def test_no_precedent_shows_no_avoid_contrast_or_evidence():
+    none = {"first_action": "Investigate DNS configuration", "reasoning": "Memory has no precedent for this.",
+            "avoid": [{"action": "Restart (RB-05)", "reason": "stretch", "incidents": ["INC-002"]}],
+            "supporting_incidents": [], "insufficient_precedent": True,
+            "contrasting_incidents": [{"incident": "INC-001", "difference": "cert, not DNS"}]}
+    out = analyzer.analyze(ALERT, memory=FakeMemory(FACTS, ReflectResult(text="x", structured=none)))
+    assert out.recommendation.insufficient_precedent is True
+    assert out.recommendation.avoid == [] and out.recommendation.contrasting_incidents == []
+    assert out.evidence == [] and out.runbook_stats == []
