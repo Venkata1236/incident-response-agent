@@ -81,3 +81,16 @@ def test_memory_unreachable_returns_a_warning_not_a_crash():
 def test_missing_structured_output_uses_written_answer():
     out = analyzer.analyze(ALERT, memory=FakeMemory(FACTS, ReflectResult(text="Roll back the deploy.", structured=None)))
     assert out.recommendation and "Roll back" in out.recommendation.reasoning
+
+
+def test_messy_incident_ids_from_the_model_are_normalised():
+    messy = dict(STRUCTURED)
+    messy["supporting_incidents"] = ["INC-002: Caused by a connection leak (v2.14)", "INC-006", "INC-002"]
+    messy["avoid"] = [{"action": "Scale out (RB-07)", "reason": "worse", "incidents": ["INC-002 and INC-006"]}]
+    messy["contrasting_incidents"] = [{"incident": "INC-004 (health check)", "difference": "no deploy"}]
+    out = analyzer.analyze(ALERT, memory=FakeMemory(FACTS, ReflectResult(text="x", structured=messy)))
+    assert out.recommendation.supporting_incidents == ["INC-002", "INC-006"]
+    assert out.recommendation.avoid[0].incidents == ["INC-002", "INC-006"]
+    assert out.recommendation.contrasting_incidents[0].incident == "INC-004"
+    cards = {c.incident_id: c for c in out.evidence}
+    assert cards["INC-002"].role == "supports" and cards["INC-002"].root_cause  # full card, not a bare snippet
