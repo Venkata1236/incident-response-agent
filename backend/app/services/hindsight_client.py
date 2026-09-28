@@ -1,4 +1,3 @@
-# Only file that talks to Hindsight: retain, recall, reflect.
 """The ONLY module that talks to Hindsight.
 
 Everything else in the codebase calls this wrapper, so if an SDK signature changes there is
@@ -98,6 +97,26 @@ class HindsightMemory:
         if self._client is None:
             self._client = _make_client()
         return self._client
+
+    # -------------------------------------------------------------------- bank
+    def ensure_bank(self, name: str = "Incident Response Agent") -> None:
+        """Create the memory bank if it does not exist yet. Safe to call repeatedly."""
+        try:
+            self.client.create_bank(bank_id=self.bank_id, name=name)
+            log.info("Bank '%s' is ready.", self.bank_id)
+        except Exception as exc:
+            text = str(exc).lower()
+            if "already exists" in text or "409" in text or "conflict" in text:
+                return  # the bank is already there, which is fine
+            raise HindsightUnavailable(f"could not create bank '{self.bank_id}': {exc}") from exc
+
+    def close(self) -> None:
+        """Close the underlying HTTP session (avoids the 'Unclosed connector' warning)."""
+        if self._client is not None:
+            try:
+                self._client.close()
+            except Exception:  # closing must never raise
+                pass
 
     # ------------------------------------------------------------------ retain
     def retain_items(self, items: list[dict[str, Any]], attempts: int = 4) -> None:
