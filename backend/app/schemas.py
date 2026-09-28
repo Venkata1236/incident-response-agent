@@ -66,3 +66,32 @@ class AnalyzeResponse(BaseModel):
     evidence: list[EvidenceCard] = []
     latency_ms: int = 0
     warnings: list[str] = []
+
+
+# ------------------------------------------------------------------ live outcomes
+class StepResult(BaseModel):
+    step: str = Field(..., min_length=3, description="What the engineer did, e.g. 'Roll back to the previous version'")
+    runbook: Optional[str] = Field(None, pattern=r"^RB-\d{2}$", description="Runbook ID if one applies, e.g. RB-09")
+    worked: bool
+
+
+class OutcomeIn(BaseModel):
+    """The engineer's report after an incident. This is the live write of the demo."""
+
+    title: str = Field(..., min_length=3)
+    log_excerpt: str = ""
+    context: str = ""
+    steps: list[StepResult] = Field(..., min_length=1)
+    root_cause: str = Field(..., min_length=3)
+    cause_tag: Optional[str] = Field(None, pattern=r"^[a-z0-9_]+$", description="e.g. connection_leak")
+    minutes_to_resolve: Optional[int] = Field(None, ge=0)
+    resolved_by: str = "on-call engineer"
+    severity: str = "SEV1"
+    incident_id: Optional[str] = Field(None, pattern=r"^INC-\d{3}$", description="Reuse an ID to overwrite (repeatable demo)")
+
+
+class OutcomeOut(BaseModel):
+    incident_id: str
+    retained: bool
+    memory_text: str
+    note: str = "Retained. Hindsight consolidates in the background, so allow a short delay before it shows up in recall."
