@@ -17,7 +17,10 @@ Answer these points:
 4. supporting_incidents: incident IDs whose failure signature and cause match this alert.
 5. contrasting_incidents: incidents that look similar (same symptom) but differ in cause or context.
    Give the specific difference. These are not supporting incidents.
-6. insufficient_precedent: true only if memory holds no similar past incident.
+6. insufficient_precedent: set to true when no past incident shares this alert's log signature or
+   symptom pattern. In that case say plainly in reasoning that memory has no precedent for this,
+   and give the most cautious generic first step. Do not stretch an unrelated runbook or incident
+   to fit; a runbook about a different component is not a precedent.
 
 Write every incident ID as the bare ID only, in the form INC-002, with no extra words after it.
 Compare the alert with past incidents on symptom, log signature, recent changes (deploys or
