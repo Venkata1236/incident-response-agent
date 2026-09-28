@@ -108,7 +108,7 @@ def analyze(alert: AlertIn, memory: Optional[HindsightMemory] = None) -> Analyze
         memory_used=True,
         recommendation=rec,
         runbook_stats=[stats[r] for r in mentioned if r in stats],
-        evidence=memory_service.build_cards(rec, grouped),
+        evidence=[] if (rec and rec.insufficient_precedent) else memory_service.build_cards(rec, grouped),
         latency_ms=int((time.perf_counter() - started) * 1000),
         warnings=warnings,
     )
@@ -125,6 +125,11 @@ def _clean_ids(values: list[str]) -> list[str]:
 
 
 def _normalise(rec: Recommendation) -> Recommendation:
+    if rec.insufficient_precedent:
+        # No precedent means nothing to avoid, contrast or cite. Showing loosely related incidents here
+        # would suggest a match that memory itself says does not exist.
+        rec.avoid, rec.supporting_incidents, rec.contrasting_incidents = [], [], []
+        return rec
     rec.supporting_incidents = _clean_ids(rec.supporting_incidents)
     for item in rec.avoid:
         item.incidents = _clean_ids(item.incidents)
