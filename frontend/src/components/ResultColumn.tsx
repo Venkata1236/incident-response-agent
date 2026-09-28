@@ -48,9 +48,9 @@ export default function ResultColumn({ title, subtitle, state, accent }: Props) 
           ))}
           {state.data.recommendation ? (
             <Recommendation rec={state.data.recommendation} />
-          ) : (
+          ) : state.data.warnings.length === 0 ? (
             <p className="empty">No recommendation was produced.</p>
-          )}
+          ) : null}
           <RunbookStats stats={state.data.runbook_stats} />
           <EvidenceList cards={state.data.evidence} />
           <p className="muted foot">{(state.data.latency_ms / 1000).toFixed(1)}s</p>
