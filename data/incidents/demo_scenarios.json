@@ -1,7 +1,15 @@
 {
   "_meta": {
-    "note": "SYNTHETIC DATA. Live alerts used in the demo and for a small hand-checked evaluation. The 'expected' fields are for checking results only. Never retain them into memory.",
-    "run_order": ["S1", "LIVE_WRITE", "S3", "S2", "S4"]
+    "note": "SYNTHETIC DATA. Live alerts used in the demo and for a small hand-checked evaluation. The 'expected' fields are for checking results only. Never retain them into memory. S5 is an alert that names only an endpoint and latency, so documentation alone points to scaling out. L1, L1_OUTCOME and L2 are the 'teach it something new' demo: a lesson that exists in no runbook.",
+    "run_order": [
+      "S1",
+      "S5",
+      "L1",
+      "L1_OUTCOME",
+      "L2",
+      "S2",
+      "S4"
+    ]
   },
   "scenarios": [
     {
@@ -16,8 +24,14 @@
       },
       "expected": {
         "first_action": "Roll back to the previous version (RB-09)",
-        "avoid": ["Treating a restart (RB-05) as a fix", "Scaling out (RB-07)"],
-        "should_cite": ["INC-002", "INC-006"]
+        "avoid": [
+          "Treating a restart (RB-05) as a fix",
+          "Scaling out (RB-07)"
+        ],
+        "should_cite": [
+          "INC-002",
+          "INC-006"
+        ]
       }
     },
     {
@@ -37,8 +51,15 @@
       },
       "expected": {
         "first_action": "Roll back to the previous version (RB-09)",
-        "avoid": ["Restart as a fix", "Scaling out (RB-07)"],
-        "should_cite": ["INC-002", "INC-006", "the live-written incident"]
+        "avoid": [
+          "Restart as a fix",
+          "Scaling out (RB-07)"
+        ],
+        "should_cite": [
+          "INC-002",
+          "INC-006",
+          "the live-written incident"
+        ]
       }
     },
     {
@@ -53,8 +74,13 @@
       },
       "expected": {
         "first_action": "Review target group health check settings (RB-11)",
-        "avoid": ["Rolling back the app (RB-09), because no deploy is involved", "Restart as a fix"],
-        "should_cite": ["INC-004"],
+        "avoid": [
+          "Rolling back the app (RB-09), because no deploy is involved",
+          "Restart as a fix"
+        ],
+        "should_cite": [
+          "INC-004"
+        ],
         "should_state_difference": "Unlike INC-002 and INC-006 there is no recent app deploy and no pool errors, so rollback would not apply."
       }
     },
@@ -70,9 +96,101 @@
       },
       "expected": {
         "first_action": "Check slow queries and missing indexes (RB-16)",
-        "avoid": ["Scaling out (RB-07)"],
-        "should_cite": ["INC-008"],
+        "avoid": [
+          "Scaling out (RB-07)"
+        ],
+        "should_cite": [
+          "INC-008"
+        ],
         "should_flag": "RB-07 has failed on INC-002, INC-006 and INC-008 and has not been reviewed since February."
+      }
+    },
+    {
+      "scenario_id": "S5",
+      "purpose": "Runbooks alone point to scaling out (RB-07); only memory knows this endpoint's query lacked an index (INC-008)",
+      "alert": {
+        "timestamp": "2026-09-28T17:30:00+05:30",
+        "service": "payments-api",
+        "title": "p95 latency 4.9s on GET /pending-payments",
+        "log_excerpt": "WARN slow request: GET /pending-payments took 4912ms (merchant_id=8841)",
+        "context": ""
+      },
+      "expected": {
+        "first_action": "Check the slow query and missing index (RB-16)",
+        "avoid": [
+          "Scaling out (RB-07)"
+        ],
+        "should_cite": [
+          "INC-008"
+        ]
+      }
+    },
+    {
+      "scenario_id": "L1",
+      "purpose": "Interaction 1 of the learning demo: a failure type memory has never seen and no runbook covers",
+      "alert": {
+        "timestamp": "2026-09-28T18:00:00+05:30",
+        "service": "payments-api",
+        "title": "Payment authorizations timing out, p95 latency 4.1s",
+        "log_excerpt": "WARN fx_client: timeout after 2000ms calling rates-service /v2/quote",
+        "context": "No deploys in the last 7 days."
+      },
+      "expected": {
+        "first_action": "No precedent: a generic answer",
+        "insufficient_precedent": true
+      }
+    },
+    {
+      "scenario_id": "L1_OUTCOME",
+      "purpose": "The engineer's report for L1. POST this to /outcomes. It contains a lesson that appears in no runbook.",
+      "outcome": {
+        "title": "Payment authorizations timing out, p95 latency 4.1s",
+        "log_excerpt": "WARN fx_client: timeout after 2000ms calling rates-service /v2/quote",
+        "context": "No deploys in the last 7 days.",
+        "steps": [
+          {
+            "step": "Disable feature flag fx_live_rates so authorizations use cached FX rates",
+            "runbook": null,
+            "worked": true
+          },
+          {
+            "step": "Restart tasks",
+            "runbook": "RB-05",
+            "worked": false
+          },
+          {
+            "step": "Scale out the service",
+            "runbook": "RB-07",
+            "worked": false
+          }
+        ],
+        "root_cause": "the third-party rates-service was timing out and live FX lookups sat on the authorization path",
+        "cause_tag": "upstream_fx_timeout",
+        "minutes_to_resolve": 18,
+        "resolved_by": "Meera",
+        "severity": "SEV2",
+        "incident_id": "INC-011"
+      }
+    },
+    {
+      "scenario_id": "L2",
+      "purpose": "Interaction 2 of the learning demo: a similar alert. Only memory can know about the fx_live_rates flag.",
+      "alert": {
+        "timestamp": "2026-09-29T11:00:00+05:30",
+        "service": "payments-api",
+        "title": "Authorization latency spike, p95 3.7s",
+        "log_excerpt": "WARN fx_client: timeout after 2000ms calling rates-service /v2/quote (retry 2/3)",
+        "context": "No recent deploys."
+      },
+      "expected": {
+        "first_action": "Disable feature flag fx_live_rates (INC-011)",
+        "avoid": [
+          "Restart tasks (RB-05)",
+          "Scaling out (RB-07)"
+        ],
+        "should_cite": [
+          "INC-011"
+        ]
       }
     }
   ]
