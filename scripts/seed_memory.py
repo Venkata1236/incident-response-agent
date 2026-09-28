@@ -1,4 +1,3 @@
-# Loads incidents.json and runbooks.json into Hindsight (retain, one call per item).
 """Load the synthetic incidents and runbooks into Hindsight.
 
 Usage (from the project root, venv active):
@@ -27,8 +26,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app import config  
-from app.services.hindsight_client import HindsightMemory, HindsightUnavailable 
+from app import config  # noqa: E402
+from app.services.hindsight_client import HindsightMemory, HindsightUnavailable  # noqa: E402
 
 log = logging.getLogger("seed")
 
@@ -95,9 +94,16 @@ def main() -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     memory = HindsightMemory()
+    try:
+        return run(args, memory)
+    finally:
+        memory.close()
 
+
+def run(args: argparse.Namespace, memory: HindsightMemory) -> int:
     if args.check:
         try:
+            memory.ensure_bank()
             found = memory.recall("payments-api incident", tags=[config.SERVICE_TAG])
         except HindsightUnavailable as exc:
             log.error("Hindsight check failed: %s", exc)
@@ -117,6 +123,12 @@ def main() -> int:
             print(it["content"][:160] + ("..." if len(it["content"]) > 160 else ""))
         print(f"\n{len(items)} items would be retained into bank '{memory.bank_id}'.")
         return 0
+
+    try:
+        memory.ensure_bank()
+    except HindsightUnavailable as exc:
+        log.error("%s", exc)
+        return 1
 
     log.info("Seeding %d items into bank '%s' ...", len(items), memory.bank_id)
     for n, it in enumerate(items, start=1):
