@@ -1,4 +1,3 @@
-# Compares memory off vs on across the demo scenarios.
 """Compare the agent with and without memory across the demo alerts, and write eval/results.md.
 
 Usage (backend running on port 8001, venv active, project root):
@@ -33,6 +32,8 @@ CHECKS = {
            "bad": ["rb-09", "roll back", "rollback", "rb-05", "restart"]},
     "S4": {"good": ["rb-16", "slow quer", "index", "query plan"],
            "bad": ["rb-07", "scale out", "scaling out"]},
+    "S5": {"good": ["rb-16", "slow quer", "index", "query plan"],
+           "bad": ["rb-07", "scale out", "scaling out"]},
 }
 
 # (scenario, label, overrides to the alert). "full" is the alert exactly as in the demo file.
@@ -43,6 +44,7 @@ VARIANTS = [
     ("S2", "less leading", {"context": "No application deploys in the last 9 days."}),
     ("S4", "full alert", {}),
     ("S4", "no context", {"context": ""}),
+    ("S5", "endpoint + latency only", {}),
 ]
 
 
