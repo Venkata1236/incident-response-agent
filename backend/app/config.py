@@ -1,4 +1,3 @@
-# Environment variables, bank id, tag names.
 """Central configuration. Everything comes from environment variables (.env at the project root)."""
 from __future__ import annotations
 
@@ -20,6 +19,8 @@ BANK_ID = os.getenv("HINDSIGHT_BANK_ID", "incident-response-agent")
 # --- LLM (used only by the analyzer, later) ----------------------------------
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
+# Groq exposes an OpenAI-compatible API. Change this if you use another provider.
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
 
 # --- Memory design -----------------------------------------------------------
 # One bank, many tags. A bank is the unit of isolation in Hindsight and there is no
@@ -32,3 +33,4 @@ SERVICE_TAG = "service:payments-api"
 OBSERVATION_SCOPES = os.getenv("OBSERVATION_SCOPES", "per_tag")
 
 DATA_DIR = ROOT_DIR / "data" / "incidents"
+RUNTIME_DIR = ROOT_DIR / "data" / "runtime"  # outcomes logged live during the demo (git-ignored)
