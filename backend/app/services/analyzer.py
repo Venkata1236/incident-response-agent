@@ -16,7 +16,7 @@ from typing import Any, Optional
 from pydantic import ValidationError
 
 from app import config
-from app.schemas import AlertIn, AnalyzeResponse, Recommendation
+from app.schemas import AlertIn, AnalyzeResponse, Contrast, Recommendation
 from app.services import llm, memory_service
 from app.services.hindsight_client import HindsightMemory, HindsightUnavailable
 
@@ -114,10 +114,33 @@ def analyze(alert: AlertIn, memory: Optional[HindsightMemory] = None) -> Analyze
     )
 
 
+def _clean_ids(values: list[str]) -> list[str]:
+    """The model sometimes writes 'INC-002: caused by a leak'. Keep only the bare ID, de-duplicated."""
+    seen: list[str] = []
+    for value in values:
+        for inc in memory_service.INCIDENT_ID.findall(value):
+            if inc not in seen:
+                seen.append(inc)
+    return seen
+
+
+def _normalise(rec: Recommendation) -> Recommendation:
+    rec.supporting_incidents = _clean_ids(rec.supporting_incidents)
+    for item in rec.avoid:
+        item.incidents = _clean_ids(item.incidents)
+    cleaned = []
+    for c in rec.contrasting_incidents:
+        ids = _clean_ids([c.incident])
+        if ids:
+            cleaned.append(Contrast(incident=ids[0], difference=c.difference))
+    rec.contrasting_incidents = cleaned
+    return rec
+
+
 def _to_recommendation(structured: Optional[dict[str, Any]], text: str) -> Optional[Recommendation]:
     if structured:
         try:
-            return Recommendation.model_validate(structured)
+            return _normalise(Recommendation.model_validate(structured))
         except ValidationError as exc:
             log.warning("structured output did not validate: %s", exc)
     if text:  # fall back to the written answer so the engineer still gets something
