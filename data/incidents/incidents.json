@@ -1,0 +1,214 @@
+{
+  "_meta": {
+    "note": "SYNTHETIC DATA. Fictional service and incidents, modeled on common failure patterns seen in public postmortems. Not real company data.",
+    "service": "payments-api",
+    "stack": "FastAPI on AWS ECS Fargate behind an ALB, PostgreSQL on RDS",
+    "how_to_use": "Retain each item's memory_text with its timestamp and tags. Do not retain the _meta block or the expected fields in demo_scenarios.json.",
+    "planted_patterns": {
+      "restart_masks_leak": ["INC-002", "INC-006"],
+      "lookalike_502_different_cause": ["INC-002", "INC-004"],
+      "stale_runbook_RB-07": ["INC-002", "INC-006", "INC-008"],
+      "clean_wins": ["INC-005", "INC-010", "INC-001"],
+      "restart_is_legitimate": ["INC-009"]
+    }
+  },
+  "incidents": [
+    {
+      "incident_id": "INC-001",
+      "timestamp": "2026-06-18T11:20:00+05:30",
+      "service": "payments-api",
+      "severity": "SEV2",
+      "symptom": "Payment authorizations failing with 401 from the upstream card gateway",
+      "log_excerpt": "ERROR gateway_client: ssl.SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate has expired (_ssl.c:1129)",
+      "steps_tried": [
+        {"step": "Rotate the expired client certificate in Secrets Manager and force a new deployment", "runbook": "RB-14", "result": "worked"}
+      ],
+      "root_cause": "Client certificate for the card gateway expired; no renewal reminder existed.",
+      "resolution": "Rotated the certificate and added a 30-day expiry alarm.",
+      "what_worked": "RB-14 certificate rotation",
+      "what_failed": "",
+      "minutes_to_resolve": 22,
+      "resolved_by": "Meera",
+      "tags": ["service:payments-api", "symptom:auth_failures", "cause:cert_expiry", "runbook:RB-14", "outcome:resolved"],
+      "memory_text": "On 18 June 2026 payments-api had a SEV2 incident: card authorizations failed with 401 from the upstream gateway and logs showed CERTIFICATE_VERIFY_FAILED, certificate has expired. The root cause was an expired client certificate for the card gateway. Rotating the certificate per runbook RB-14 and forcing a new deployment fixed it in 22 minutes, resolved by Meera. An expiry alarm was added afterward. Outcome: RB-14 worked."
+    },
+    {
+      "incident_id": "INC-002",
+      "timestamp": "2026-07-02T02:10:00+05:30",
+      "service": "payments-api",
+      "severity": "SEV1",
+      "symptom": "p95 latency rose to 3.8s and the ALB returned 502s to merchants",
+      "log_excerpt": "ERROR sqlalchemy.exc.TimeoutError: QueuePool limit of size 20 overflow 10 reached, connection timed out, timeout 30.00",
+      "steps_tried": [
+        {"step": "Force a new deployment to restart tasks", "runbook": "RB-05", "result": "recovered for about 25 minutes, then the symptoms returned"},
+        {"step": "Scale out the ECS service from 4 to 8 tasks", "runbook": "RB-07", "result": "made it worse: RDS connection count rose and more requests timed out"},
+        {"step": "Roll back to the previous task definition (v2.13)", "runbook": "RB-09", "result": "worked"}
+      ],
+      "root_cause": "Deploy v2.14 on 30 June introduced a database connection leak in the payment retry loop: sessions were not closed when a retry raised an exception.",
+      "resolution": "Rolled back to v2.13, then fixed the retry loop and redeployed after review.",
+      "what_worked": "RB-09 rollback to the version before the deploy",
+      "what_failed": "RB-05 restart only masked the leak; RB-07 scale-out increased database connections and worsened it",
+      "minutes_to_resolve": 96,
+      "resolved_by": "Arjun",
+      "tags": ["service:payments-api", "symptom:502", "symptom:latency", "cause:connection_leak", "cause:bad_deploy", "runbook:RB-05", "runbook:RB-07", "runbook:RB-09", "outcome:resolved"],
+      "memory_text": "On 2 July 2026 payments-api had a SEV1 incident: p95 latency hit 3.8 seconds and the ALB returned 502s. Logs showed sqlalchemy QueuePool limit of size 20 overflow 10 reached. Restarting the tasks (RB-05) recovered the service for about 25 minutes and then the symptoms came back, so the restart only masked the problem. Scaling out from 4 to 8 tasks (RB-07) made it worse because more tasks opened more database connections. Rolling back to v2.13 (RB-09) fixed it. The root cause was a connection leak in the payment retry loop introduced in deploy v2.14 on 30 June. It took 96 minutes, resolved by Arjun. Outcome: rollback worked; restart and scale-out did not."
+    },
+    {
+      "incident_id": "INC-003",
+      "timestamp": "2026-07-09T16:45:00+05:30",
+      "service": "payments-api",
+      "severity": "SEV3",
+      "symptom": "Intermittent 429 errors when calling the partner bank API for payouts",
+      "log_excerpt": "WARN bank_client: HTTP 429 Too Many Requests from bank-api, Retry-After: 30",
+      "steps_tried": [
+        {"step": "Add exponential backoff and lower the payout batch rate", "runbook": "", "result": "worked"}
+      ],
+      "root_cause": "Payout batch sent requests faster than the partner's rate limit after a volume increase.",
+      "resolution": "Added exponential backoff with jitter and reduced concurrency from 20 to 8.",
+      "what_worked": "Backoff plus lower concurrency",
+      "what_failed": "",
+      "minutes_to_resolve": 35,
+      "resolved_by": "Priya",
+      "tags": ["service:payments-api", "symptom:429", "cause:third_party_rate_limit", "outcome:resolved"],
+      "memory_text": "On 9 July 2026 payments-api had a SEV3 incident: payouts to the partner bank API returned intermittent 429 Too Many Requests with a Retry-After of 30 seconds. The cause was the payout batch exceeding the partner's rate limit after volume grew. Adding exponential backoff with jitter and reducing concurrency from 20 to 8 fixed it in 35 minutes, resolved by Priya. Outcome: backoff and lower concurrency worked."
+    },
+    {
+      "incident_id": "INC-004",
+      "timestamp": "2026-07-19T14:35:00+05:30",
+      "service": "payments-api",
+      "severity": "SEV1",
+      "symptom": "Intermittent 502s from the ALB, with 2 of 4 targets flapping between healthy and unhealthy",
+      "log_excerpt": "target-group tg-payments-api: 2 of 4 targets unhealthy (Health checks failed: Request timed out)",
+      "steps_tried": [
+        {"step": "Force a new deployment to restart tasks", "runbook": "RB-05", "result": "no effect; targets flapped again within minutes"},
+        {"step": "Roll back the application from v2.15 to v2.14", "runbook": "RB-09", "result": "no effect; there had been no deploy in the previous 4 days"},
+        {"step": "Review target group health check settings against the service", "runbook": "RB-11", "result": "worked"}
+      ],
+      "root_cause": "Infrastructure change CHG-4471 pointed the ALB health check at /healthz/deep, which queries the database, with a 2 second timeout. Under load the deep check timed out and healthy tasks were marked unhealthy.",
+      "resolution": "Reverted the health check to /health with a 5 second timeout and a threshold of 3 failures.",
+      "what_worked": "RB-11 health check review and revert",
+      "what_failed": "RB-05 restart and RB-09 rollback did nothing because the application code was not the cause",
+      "minutes_to_resolve": 74,
+      "resolved_by": "Sanjay",
+      "tags": ["service:payments-api", "symptom:502", "cause:health_check_config", "cause:infra_change", "runbook:RB-05", "runbook:RB-09", "runbook:RB-11", "outcome:resolved"],
+      "memory_text": "On 19 July 2026 payments-api had a SEV1 incident with intermittent 502s from the ALB while 2 of 4 targets flapped between healthy and unhealthy. Health checks failed with request timed out. This looked like INC-002 (502s) but the cause was different: there was no recent application deploy. Infrastructure change CHG-4471 had pointed the ALB health check at /healthz/deep, which queries the database, with a 2 second timeout, so under load healthy tasks were marked unhealthy. Restarting tasks (RB-05) and rolling back the app (RB-09) did nothing and wasted about 40 minutes. Reviewing the health check settings (RB-11) and reverting to /health with a 5 second timeout fixed it. It took 74 minutes, resolved by Sanjay. Outcome: RB-11 worked; restart and rollback did not."
+    },
+    {
+      "incident_id": "INC-005",
+      "timestamp": "2026-07-27T01:40:00+05:30",
+      "service": "payments-api",
+      "severity": "SEV2",
+      "symptom": "ECS tasks repeatedly stopping during the nightly reconciliation batch",
+      "log_excerpt": "ECS: Essential container in task exited, exit code 137, reason: OutOfMemoryError: Container killed due to memory usage",
+      "steps_tried": [
+        {"step": "Raise task memory from 512 to 1024 MiB and cap reconciliation batch size from 5000 to 1000", "runbook": "RB-03", "result": "worked"}
+      ],
+      "root_cause": "Reconciliation loaded 5000 ledger rows into memory at once, exceeding the 512 MiB task limit.",
+      "resolution": "Increased task memory and capped the batch size.",
+      "what_worked": "RB-03 memory increase plus batch cap",
+      "what_failed": "",
+      "minutes_to_resolve": 28,
+      "resolved_by": "Meera",
+      "tags": ["service:payments-api", "symptom:task_restarts", "cause:oom", "runbook:RB-03", "outcome:resolved"],
+      "memory_text": "On 27 July 2026 payments-api had a SEV2 incident: ECS tasks kept stopping during the nightly reconciliation batch with exit code 137 and OutOfMemoryError. The cause was the batch loading 5000 ledger rows into memory against a 512 MiB task limit. Raising task memory to 1024 MiB and capping the batch size at 1000 (RB-03) fixed it in 28 minutes, resolved by Meera. Outcome: RB-03 worked."
+    },
+    {
+      "incident_id": "INC-006",
+      "timestamp": "2026-08-12T10:25:00+05:30",
+      "service": "payments-api",
+      "severity": "SEV1",
+      "symptom": "p95 latency rose to 4.1s and 502s appeared shortly after a deploy",
+      "log_excerpt": "ERROR sqlalchemy.exc.TimeoutError: QueuePool limit of size 20 overflow 10 reached, connection timed out, timeout 30.00",
+      "steps_tried": [
+        {"step": "Force a new deployment to restart tasks", "runbook": "RB-05", "result": "recovered for about 20 minutes, then the symptoms returned"},
+        {"step": "Scale out the ECS service from 4 to 8 tasks", "runbook": "RB-07", "result": "made it worse: database connections rose again"},
+        {"step": "Roll back to the previous task definition (v2.18)", "runbook": "RB-09", "result": "worked"}
+      ],
+      "root_cause": "Deploy v2.19 on 11 August introduced a second connection leak, this time in the webhook handler timeout path where the session was not released.",
+      "resolution": "Rolled back to v2.18; the webhook handler was fixed and redeployed the next day.",
+      "what_worked": "RB-09 rollback",
+      "what_failed": "RB-05 restart masked the leak again; RB-07 scale-out worsened it again",
+      "minutes_to_resolve": 71,
+      "resolved_by": "Priya",
+      "tags": ["service:payments-api", "symptom:502", "symptom:latency", "cause:connection_leak", "cause:bad_deploy", "runbook:RB-05", "runbook:RB-07", "runbook:RB-09", "outcome:resolved"],
+      "memory_text": "On 12 August 2026 payments-api had a SEV1 incident: p95 latency hit 4.1 seconds and 502s appeared shortly after deploy v2.19. Logs again showed the sqlalchemy QueuePool limit reached error, the same signature as INC-002 on 2 July. The on-call engineer restarted the tasks (RB-05), which recovered the service for about 20 minutes before it failed again, then scaled out from 4 to 8 tasks (RB-07), which made it worse. A senior engineer recognized the INC-002 pattern and rolled back to v2.18 (RB-09), which fixed it. The root cause was a new connection leak in the webhook handler timeout path in v2.19. It took 71 minutes, resolved by Priya. Outcome: rollback worked; restart and scale-out failed for the second time on this failure signature."
+    },
+    {
+      "incident_id": "INC-007",
+      "timestamp": "2026-08-19T20:05:00+05:30",
+      "service": "payments-api",
+      "severity": "SEV2",
+      "symptom": "Writes failing and the database storage alarm firing",
+      "log_excerpt": "ERROR psycopg2.errors.DiskFull: could not extend file \"base/16384/28811\": No space left on device",
+      "steps_tried": [
+        {"step": "Enable RDS storage autoscaling and archive audit_log rows older than 90 days", "runbook": "RB-18", "result": "worked"}
+      ],
+      "root_cause": "The audit_log table grew unbounded and RDS free storage fell below 2 percent.",
+      "resolution": "Enabled storage autoscaling and added a nightly archive job for audit_log.",
+      "what_worked": "RB-18 storage autoscaling plus archival",
+      "what_failed": "",
+      "minutes_to_resolve": 48,
+      "resolved_by": "Arjun",
+      "tags": ["service:payments-api", "symptom:write_failures", "cause:db_storage", "runbook:RB-18", "outcome:resolved"],
+      "memory_text": "On 19 August 2026 payments-api had a SEV2 incident: writes failed with psycopg2 DiskFull, no space left on device, and the RDS storage alarm fired. The audit_log table had grown unbounded. Enabling RDS storage autoscaling and archiving audit_log rows older than 90 days (RB-18) fixed it in 48 minutes, resolved by Arjun. Outcome: RB-18 worked."
+    },
+    {
+      "incident_id": "INC-008",
+      "timestamp": "2026-09-01T15:50:00+05:30",
+      "service": "payments-api",
+      "severity": "SEV2",
+      "symptom": "p95 latency rose to 5.2s with database CPU at 98 percent",
+      "log_excerpt": "RDS CPUUtilization 98% for 15 min; slow query 4.2s: SELECT * FROM ledger_entries WHERE merchant_id = $1 AND status = 'pending' ORDER BY created_at (Seq Scan)",
+      "steps_tried": [
+        {"step": "Scale out the ECS service from 4 to 8 tasks", "runbook": "RB-07", "result": "no improvement; database CPU rose to 100 percent"},
+        {"step": "Identify the slow query and create an index concurrently", "runbook": "RB-16", "result": "worked"}
+      ],
+      "root_cause": "A new pending-payments endpoint ran a sequential scan on ledger_entries because there was no index on (merchant_id, status, created_at).",
+      "resolution": "Created the index with CREATE INDEX CONCURRENTLY; latency recovered within minutes.",
+      "what_worked": "RB-16 slow query analysis and index creation",
+      "what_failed": "RB-07 scale-out did not help because the bottleneck was the database, not the application tasks",
+      "minutes_to_resolve": 63,
+      "resolved_by": "Sanjay",
+      "tags": ["service:payments-api", "symptom:latency", "cause:missing_index", "cause:db_cpu", "runbook:RB-07", "runbook:RB-16", "outcome:resolved"],
+      "memory_text": "On 1 September 2026 payments-api had a SEV2 incident: p95 latency reached 5.2 seconds and RDS CPU sat at 98 percent, with no connection pool errors in the logs. Scaling out from 4 to 8 tasks (RB-07) did not help and pushed database CPU to 100 percent. This was the third incident where RB-07 scale-out failed. The slow query log showed a sequential scan on ledger_entries from a new pending-payments endpoint. Creating an index on (merchant_id, status, created_at) concurrently (RB-16) fixed it. It took 63 minutes, resolved by Sanjay. Outcome: RB-16 worked; RB-07 scale-out failed because the bottleneck was the database."
+    },
+    {
+      "incident_id": "INC-009",
+      "timestamp": "2026-09-10T22:15:00+05:30",
+      "service": "payments-api",
+      "severity": "SEV3",
+      "symptom": "Settlement worker stopped consuming messages and the queue backlog grew",
+      "log_excerpt": "WARN settlement-worker: no heartbeat for 300s; consumer thread blocked waiting on advisory lock",
+      "steps_tried": [
+        {"step": "Force a new deployment of the settlement worker to restart it", "runbook": "RB-05", "result": "worked"}
+      ],
+      "root_cause": "A one-off thread deadlock on a Postgres advisory lock in the settlement worker. No connection leak or recent deploy was involved.",
+      "resolution": "Restarted the worker; a ticket was opened to add a lock timeout.",
+      "what_worked": "RB-05 restart",
+      "what_failed": "",
+      "minutes_to_resolve": 12,
+      "resolved_by": "Meera",
+      "tags": ["service:payments-api", "symptom:queue_backlog", "cause:deadlock", "runbook:RB-05", "outcome:resolved"],
+      "memory_text": "On 10 September 2026 the payments-api settlement worker stopped consuming messages and the queue backlog grew. Logs showed no heartbeat for 300 seconds with the consumer thread blocked on an advisory lock. This was a one-off deadlock with no connection leak and no recent deploy. Restarting the worker (RB-05) fixed it in 12 minutes, resolved by Meera. Outcome: restart worked here because the cause was a stuck thread, not a leak. A ticket was opened to add a lock timeout."
+    },
+    {
+      "incident_id": "INC-010",
+      "timestamp": "2026-09-21T13:10:00+05:30",
+      "service": "payments-api",
+      "severity": "SEV2",
+      "symptom": "ECS tasks stopping after the new merchant report export feature launched",
+      "log_excerpt": "ECS: Essential container in task exited, exit code 137, reason: OutOfMemoryError: Container killed due to memory usage",
+      "steps_tried": [
+        {"step": "Raise task memory from 1024 to 2048 MiB and stream the export in chunks", "runbook": "RB-03", "result": "worked"}
+      ],
+      "root_cause": "The report export built the full result set in memory. The engineer recognized the same signature as INC-005.",
+      "resolution": "Increased task memory and changed the export to stream in chunks.",
+      "what_worked": "RB-03 memory increase, applied immediately because the signature matched INC-005",
+      "what_failed": "",
+      "minutes_to_resolve": 14,
+      "resolved_by": "Priya",
+      "tags": ["service:payments-api", "symptom:task_restarts", "cause:oom", "runbook:RB-03", "outcome:resolved"],
+      "memory_text": "On 21 September 2026 payments-api had a SEV2 incident: ECS tasks stopped with exit code 137 and OutOfMemoryError after the new merchant report export feature launched. The engineer recognized the same signature as INC-005 from 27 July and went straight to RB-03: raising task memory from 1024 to 2048 MiB and streaming the export in chunks. It was fixed in 14 minutes, resolved by Priya, compared with 28 minutes the first time. Outcome: RB-03 worked."
+    }
+  ]
+}

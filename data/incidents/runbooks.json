@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "note": "SYNTHETIC DATA. Fictional runbooks for the fictional payments-api service.",
+    "how_to_use": "Retain each runbook once as a document with its last_reviewed date. Outcomes come from incidents.json, not from this file."
+  },
+  "runbooks": [
+    {"runbook_id": "RB-03", "title": "Tasks killed for out-of-memory", "steps": "Check the ECS stopped-task reason for exit code 137. Raise the task memory one tier. Check batch and export sizes and cap or stream them.", "last_reviewed": "2026-03-04"},
+    {"runbook_id": "RB-05", "title": "Restart tasks", "steps": "Force a new deployment of the ECS service so tasks are replaced.", "last_reviewed": "2026-02-10"},
+    {"runbook_id": "RB-07", "title": "Scale out when latency is high", "steps": "Increase the ECS desired task count from 4 to 8 and watch latency.", "last_reviewed": "2026-02-10"},
+    {"runbook_id": "RB-09", "title": "Roll back a deploy", "steps": "Redeploy the previous ECS task definition revision and confirm the error rate falls.", "last_reviewed": "2026-05-22"},
+    {"runbook_id": "RB-11", "title": "ALB target health investigation", "steps": "Compare the target group health check path, timeout and thresholds against what the service can answer under load. Check recent infrastructure changes.", "last_reviewed": "2026-04-15"},
+    {"runbook_id": "RB-14", "title": "Rotate an expired certificate", "steps": "Issue a new certificate, update Secrets Manager, force a new deployment.", "last_reviewed": "2026-05-30"},
+    {"runbook_id": "RB-16", "title": "Slow query and missing index", "steps": "Find slow queries in the RDS performance insights, check the query plan, create the index concurrently.", "last_reviewed": "2026-04-02"},
+    {"runbook_id": "RB-18", "title": "Database storage nearly full", "steps": "Enable RDS storage autoscaling, archive or purge old rows from the largest tables.", "last_reviewed": "2026-05-12"}
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "_meta": {
+    "note": "SYNTHETIC DATA. Live alerts used in the demo and for a small hand-checked evaluation. The 'expected' fields are for checking results only. Never retain them into memory.",
+    "run_order": ["S1", "LIVE_WRITE", "S3", "S2", "S4"]
+  },
+  "scenarios": [
+    {
+      "scenario_id": "S1",
+      "purpose": "Memory changes the recommendation: same signature as INC-002 and INC-006",
+      "alert": {
+        "timestamp": "2026-09-28T09:40:00+05:30",
+        "service": "payments-api",
+        "title": "p95 latency 4.4s and 502s rising",
+        "log_excerpt": "ERROR sqlalchemy.exc.TimeoutError: QueuePool limit of size 20 overflow 10 reached, connection timed out, timeout 30.00",
+        "context": "Deploy v2.22 shipped 40 minutes ago."
+      },
+      "expected": {
+        "first_action": "Roll back to the previous version (RB-09)",
+        "avoid": ["Treating a restart (RB-05) as a fix", "Scaling out (RB-07)"],
+        "should_cite": ["INC-002", "INC-006"]
+      }
+    },
+    {
+      "scenario_id": "LIVE_WRITE",
+      "purpose": "The one real retain call made live during the demo",
+      "outcome_to_retain": "On 28 September 2026 payments-api had a SEV1 incident: p95 latency 4.4 seconds and 502s after deploy v2.22, with the sqlalchemy QueuePool limit reached error. Rolling back to v2.21 (RB-09) fixed it in 9 minutes. Restart and scale-out were not attempted because earlier incidents INC-002 and INC-006 showed they fail on this signature. Outcome: rollback worked. Root cause: another connection leak introduced by v2.22."
+    },
+    {
+      "scenario_id": "S3",
+      "purpose": "After the live write, a similar alert should now cite three matching incidents",
+      "alert": {
+        "timestamp": "2026-09-29T11:05:00+05:30",
+        "service": "payments-api",
+        "title": "p95 latency 3.9s and 502s rising",
+        "log_excerpt": "ERROR sqlalchemy.exc.TimeoutError: QueuePool limit of size 20 overflow 10 reached, connection timed out, timeout 30.00",
+        "context": "Deploy v2.23 shipped 30 minutes ago."
+      },
+      "expected": {
+        "first_action": "Roll back to the previous version (RB-09)",
+        "avoid": ["Restart as a fix", "Scaling out (RB-07)"],
+        "should_cite": ["INC-002", "INC-006", "the live-written incident"]
+      }
+    },
+    {
+      "scenario_id": "S2",
+      "purpose": "Lookalike: 502s again, but the earlier rollback fix should NOT apply",
+      "alert": {
+        "timestamp": "2026-09-28T14:20:00+05:30",
+        "service": "payments-api",
+        "title": "Intermittent 502s, targets flapping",
+        "log_excerpt": "target-group tg-payments-api: 2 of 4 targets unhealthy (Health checks failed: Request timed out)",
+        "context": "No application deploys in the last 9 days. An infrastructure change was applied to the load balancer yesterday."
+      },
+      "expected": {
+        "first_action": "Review target group health check settings (RB-11)",
+        "avoid": ["Rolling back the app (RB-09), because no deploy is involved", "Restart as a fix"],
+        "should_cite": ["INC-004"],
+        "should_state_difference": "Unlike INC-002 and INC-006 there is no recent app deploy and no pool errors, so rollback would not apply."
+      }
+    },
+    {
+      "scenario_id": "S4",
+      "purpose": "Stale runbook: RB-07 has failed three times",
+      "alert": {
+        "timestamp": "2026-09-28T16:00:00+05:30",
+        "service": "payments-api",
+        "title": "p95 latency 4.9s, database CPU 97 percent",
+        "log_excerpt": "RDS CPUUtilization 97% for 12 min; no connection pool errors in application logs",
+        "context": "A new endpoint was released this morning."
+      },
+      "expected": {
+        "first_action": "Check slow queries and missing indexes (RB-16)",
+        "avoid": ["Scaling out (RB-07)"],
+        "should_cite": ["INC-008"],
+        "should_flag": "RB-07 has failed on INC-002, INC-006 and INC-008 and has not been reviewed since February."
+      }
+    }
+  ]
+}
