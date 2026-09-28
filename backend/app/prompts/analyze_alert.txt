@@ -19,5 +19,6 @@ Answer these points:
    Give the specific difference. These are not supporting incidents.
 6. insufficient_precedent: true only if memory holds no similar past incident.
 
+Write every incident ID as the bare ID only, in the form INC-002, with no extra words after it.
 Compare the alert with past incidents on symptom, log signature, recent changes (deploys or
 infrastructure changes) and the fix that finally worked.
